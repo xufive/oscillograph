@@ -143,7 +143,7 @@ class MainFrame(wx.Frame):
         """关闭窗口"""
         
         if self.sample_thread and self.sample_thread.isAlive():
-            self.ac.stop()
+            self.sampler.stop()
         
         if self.sample_thread:
             self.sample_thread.join()
