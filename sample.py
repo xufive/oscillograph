@@ -6,25 +6,19 @@ import numpy as np
 class AudioSampler:
     """音频采样器"""
     
-    def __init__(self, dq, **kwds):
+    def __init__(self, dq, rate=44100):
         """构造函数"""
         
         self.dq = dq                                # 数据队列
-        self.rate = kwds.get('rate', 44100)         # 采样频率
-        self.chunk = kwds.get('chunk', 1024)        # 数据块大小
-        self.mode = kwds.get('mode', True)          # 模式开关：True - 实时模式，False - 触发模式
-        self.level = kwds.get('level', 512)         # 触发模式下的触发阈值
-        self.over = kwds.get('over', 32)            # 触发模式下的触发数量
+        self.rate = rate                            # 采样频率
+        self.chunk = 1024                           # 数据块大小
+        self.mode = 1                               # 模式开关：0 - 触发模式，1 - 实时模式
+        self.level = 16                             # 触发模式下的触发阈值
+        self.over = 1                               # 触发模式下的触发数量
         self.running = False                        # 采样器工作状态
         
     def set_args(self, **kwds):
         """设置参数"""
-        
-        if 'rate' in kwds:
-            self.rate = kwds['rate']
-        
-        if 'chunk' in kwds:
-            self.chunk = kwds['chunk']
         
         if 'mode' in kwds:
             self.mode = kwds['mode']

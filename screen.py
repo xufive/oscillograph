@@ -9,16 +9,18 @@ class Screen(wx.Panel):
     def __init__(self, parent, rate=44100):
         """构造函数"""
         
-        wx.Panel.__init__(self, parent, -1, style=wx.EXPAND)
+        wx.Panel.__init__(self, parent, -1, style=wx.SUNKEN_BORDER)
         self.SetBackgroundColour(wx.Colour(0, 0, 0))
         self.SetDoubleBuffered(True)
-        
+                
         self.parent = parent                        # 父级控件
         self.rate = rate                            # 采样频率
         self.scale = 1024                           # 信号幅度基准
-        self.tw = 20                                # 以ms为单位的时间窗口宽度
+        self.tw = 32                                # 以ms为单位的时间窗口宽度
         self.pos = 0                                # 时间窗口左侧在数据流上的位置
         self.k = int(self.tw*self.rate/1000)        # 时间窗口覆盖的数据点数
+        self.leftdown = False                       # 鼠标左键按下
+        self.mpos = wx._core.Point()                # 鼠标位置
         self.data = np.array([], dtype=np.int16)    # 音频数据
         self.scrsize = self.GetSize()               # 示波器屏幕宽度和高度
         self.args = self._update()                  # 绘图参数
@@ -27,6 +29,9 @@ class Screen(wx.Panel):
         self.Bind(wx.EVT_SIZE, self.on_size)
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_wheel)
+        self.Bind(wx.EVT_LEFT_DOWN, self.on_left_down)
+        self.Bind(wx.EVT_LEFT_UP, self.on_left_up)                
+        self.Bind(wx.EVT_MOTION, self.on_mouse_motion)
     
     def _update(self):
         """更新绘图参数"""
@@ -69,10 +74,22 @@ class Screen(wx.Panel):
         
         return args
     
+    def _check_pos(self):
+        """时间窗口位置校正"""
+        
+        if self.pos < 0 or self.data.data.shape[0] <= self.k:
+            self.pos = 0
+            self.parent.slider.SetValue(0)
+        elif self.pos > self.data.data.shape[0] - self.k:
+            self.pos = self.data.data.shape[0] - self.k
+            self.parent.slider.SetValue(1000)
+        else:
+            self.parent.slider.SetValue(int(1000*self.pos/(self.data.data.shape[0] - self.k)))
+    
     def on_wheel(self, evt):
         """响应鼠标滚轮调整波形幅度"""
         
-        self.scale = self.scale//2 if evt.WheelRotation > 0 else self.scale*2
+        self.scale = self.scale*0.8 if evt.WheelRotation > 0 else self.scale*1.2
         if self.scale < 32:
             self.scale = 32
         if self.scale > 32768:
@@ -81,6 +98,30 @@ class Screen(wx.Panel):
         self.parent.vknob.SetValue(10 * (np.log2(self.scale)-5))
         self.args = self._update()
         self.Refresh()
+    
+    def on_left_down(self, evt):
+        """响应鼠标左键按下事件"""
+        
+        self.leftdown = True
+        self.mpos = evt.GetPosition()
+        
+    def on_left_up(self, evt):
+        """响应鼠标左键弹起事件"""
+        
+        self.leftdown = False
+        
+    def on_mouse_motion(self, evt):
+        """响应鼠标移动事件"""
+        
+        if evt.Dragging() and self.leftdown:
+            pos = evt.GetPosition()
+            dx, dy = pos - self.mpos
+            self.mpos = pos
+            
+            self.pos -= int(self.k * dx / self.scrsize[0])
+            self._check_pos()
+            self.args = self._update()
+            self.Refresh()
             
     def on_size(self, evt):
         """响应窗口大小变化"""
@@ -98,7 +139,7 @@ class Screen(wx.Panel):
     def set_amplitude(self, value):
         """设置幅度缩放比例"""
         
-        self.scale = pow(2, 5+int(value/10))
+        self.scale = pow(2, 5 + value/10)
         self.args = self._update()
         self.Refresh()
     
@@ -106,19 +147,10 @@ class Screen(wx.Panel):
         """设置时间窗口宽度"""
         
         center = self.pos + self.k//2
-        self.tw = [0.1,0.2,0.5,1,2,5,10,20,50,100,200,500,1000,2000,5000,10000][int(value/6.6666)]
+        self.tw = 0.1 * pow(1.1220184543019633, value)
         self.k = int(self.tw*self.rate/1000)
         self.pos = center - self.k//2
-        
-        if self.pos < 0 or self.data.data.shape[0] <= self.k:
-            self.pos = 0
-            self.parent.slider.SetValue(0)
-        elif self.pos > self.data.data.shape[0] - self.k:
-            self.pos = self.data.data.shape[0] - self.k
-            self.parent.slider.SetValue(100)
-        else:
-            self.parent.slider.SetValue(int(100*self.pos/(self.data.data.shape[0] - self.k)))
-        
+        self._check_pos()
         self.args = self._update()
         self.Refresh()
     
@@ -134,9 +166,12 @@ class Screen(wx.Panel):
         """设置时间窗口位置"""
         
         length = self.data.shape[0] - self.k
-        self.pos = int(length*pos/100) if length > 0 else 0
+        self.pos = int(length*pos/1000) if length > 0 else 0
         self.args = self._update()
         self.Refresh()
+        
+        if self.pos == 0:
+            self.parent.slider.SetValue(0)
     
     def clear(self):
         """清除数据"""
